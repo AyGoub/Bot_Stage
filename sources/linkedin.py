@@ -24,6 +24,14 @@ Limites connues :
     filtre défensif supplémentaire sur le titre (voir INTERNSHIP_TITLE_HINTS)
     pour ne garder que les intitulés qui ressemblent explicitement à un
     stage, en plus du filtre de durée déjà fait par config.is_relevant.
+  - IMPORTANT (bug corrigé le 2026-07-11) : cet endpoint renvoie toujours
+    10 résultats par page, quel que soit le paramètre envoyé (testé avec
+    count=25/50 : toujours 10). Le code pensait auparavant que la page
+    faisait 25, donc il s'arrêtait après la 1ère page (10 < 25) en croyant
+    avoir atteint la fin — alors que des offres pertinentes ("Stage de fin
+    d'études - Consultant Cybersécurité", vérifié en conditions réelles)
+    n'apparaissaient qu'à partir du résultat 50. D'où PAGE_SIZE = 10 et une
+    profondeur de pagination augmentée ci-dessous.
 """
 import logging
 import time
@@ -45,8 +53,8 @@ HEADERS = {
     "Accept-Language": "fr-FR,fr;q=0.9",
 }
 
-PAGE_SIZE = 25
-MAX_RESULTS_PER_TERM = 100  # garde-fou anti-boucle infinie
+PAGE_SIZE = 10  # taille de page réelle de l'endpoint, non configurable (voir docstring)
+MAX_RESULTS_PER_TERM = 100  # garde-fou anti-boucle infinie (= 10 pages / terme)
 REQUEST_DELAY_SECONDS = 1.5  # délai raisonnable entre requêtes
 
 # f_JT=I n'étant pas fiable en anonyme (voir docstring), on exige en plus

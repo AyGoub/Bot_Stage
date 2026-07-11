@@ -99,14 +99,22 @@ INCLUDE_KEYWORDS = [
     "iso 27001",
 ]
 
-# Offres à exclure même si elles contiennent un mot-clé offensif : ce ne
-# sont pas des stages de fin d'études classiques (PFE).
+# Offres à exclure même si elles contiennent un mot-clé de INCLUDE_KEYWORDS :
+# ce ne sont pas des stages de fin d'études classiques (PFE) en France.
 EXCLUDE_CONTRACT_KEYWORDS = [
     "alternance",
     "apprentissage",
     "contrat de professionnalisation",
     "volontariat international",
 ]
+
+# Le VIE (Volontariat International en Entreprise, 12-24 mois à l'étranger)
+# est souvent abrégé "VIE" en majuscules dans les titres LinkedIn (ex: "-
+# VIE - Barcelone"). On ne peut pas l'ajouter tel quel à EXCLUDE_CONTRACT_
+# KEYWORDS (insensible à la casse) car "vie" en minuscule est un mot français
+# courant et légitime ("vie professionnelle", "vie privée"...). D'où ce
+# contrôle séparé, sensible à la casse, sur l'acronyme en majuscules.
+_VIE_ACRONYM_RE = re.compile(r"\bVIE\b")
 
 # Durée de stage visée, en mois. Une offre dont la description mentionne
 # explicitement une (ou plusieurs) durée(s) toutes en dehors de cette
@@ -151,6 +159,9 @@ def is_relevant(title, description=""):
         return False
 
     if _contains_any_keyword(text, EXCLUDE_CONTRACT_KEYWORDS):
+        return False
+
+    if _VIE_ACRONYM_RE.search(text):
         return False
 
     durations = extract_duration_months(description)
