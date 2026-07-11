@@ -86,8 +86,12 @@ INCLUDE_KEYWORDS = [
     "intrusion",
     "exploitation de vulnérabilités",
     "exploitation de vulnerabilites",
-    "vulnérabilité",
-    "vulnerabilite",
+    # "vulnérabilité" seul est volontairement absent : trop ambigu hors
+    # contexte IT (vulnérabilité sismique/structurelle d'un bâtiment,
+    # vulnérabilité sociale...). D'où ces variantes composées à la place.
+    "vulnérabilité informatique",
+    "vulnérabilité applicative",
+    "vulnérabilités de sécurité",
     "soc",
     "grc",
     "conformité",
