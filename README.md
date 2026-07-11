@@ -29,6 +29,20 @@ indice de stage ("stage", "stagiaire", "intern", "pfe"...), mais une offre
 de pentest en stage dont le titre ne le précise pas explicitement (ex:
 juste "Pentester (H/F)") pourrait être manquée.
 
+**Limite (importante) de la source France Travail**, découverte en testant
+avec de vraies clés : il n'existe **aucun code "Stage"** dans les
+référentiels `typeContrat` (CDI/CDD/MIS/SAI/...) ni `natureContrat` de
+l'API — un stage n'étant légalement pas un "contrat de travail" en France,
+il est structurellement absent de cette taxonomie. Le paramètre
+`typeContrat=STG` documenté dans certains exemples publics n'existe pas et
+renvoie une erreur HTTP 400. Comme pour LinkedIn, le bot filtre donc côté
+client sur la présence de "stage"/"stagiaire"/"pfe" dans le titre. Testé en
+conditions réelles le 2026-07-11 : l'API répond correctement, mais très peu
+(voire aucune, au moment du test) offre de stage en cybersécurité
+offensive n'y est actuellement publiée — la plupart des offres pentest/red
+team sur France Travail sont des CDI. Ce n'est pas un bug, juste la réalité
+du marché ; le bot continuera de surveiller.
+
 ## Installation locale
 
 ```bash
@@ -45,22 +59,22 @@ En production (GitHub Actions), les variables viennent des secrets du repo.
 
 ## 1. Créer un compte développeur France Travail
 
-1. Allez sur [francetravail.io](https://francetravail.io) et créez un compte.
-2. Dans votre espace développeur, créez une nouvelle application.
-3. Abonnez l'application à l'API **"Offres d'emploi v2"** (scope
-   `api_offresdemploiv2`).
-4. Récupérez l'**Identifiant client** et la **Clé secrète** — ce sont vos
+Le site a été refondu ; il n'y a plus de menu "Mes applications" séparé,
+tout part de la fiche de l'API elle-même :
+
+1. Allez directement sur la page de l'API :
+   [francetravail.io/produits-partages/catalogue/offres-emploi](https://francetravail.io/produits-partages/catalogue/offres-emploi)
+2. Cliquez sur le bouton **"Utiliser l'API"** en haut de la page.
+3. Connectez-vous, ou créez un compte si vous n'en avez pas encore.
+4. Le parcours vous propose d'**associer cette API à une application** —
+   créez-en une nouvelle à cette étape si vous n'en avez pas.
+5. Une fois l'application créée et associée à l'API, récupérez
+   l'**Identifiant client** et la **Clé secrète** — ce sont vos
    `FRANCE_TRAVAIL_CLIENT_ID` / `FRANCE_TRAVAIL_CLIENT_SECRET`.
 
-⚠️ Le code de type de contrat utilisé pour filtrer les stages est `"STG"`
-(`sources/france_travail.py`). C'est la valeur documentée par l'API, mais
-si aucun résultat ne remonte lors de votre premier test, vérifiez le
-référentiel officiel :
-
-```bash
-curl -H "Authorization: Bearer VOTRE_TOKEN" \
-  "https://api.francetravail.io/partenaire/offresdemploi/v2/referentiel/typesContrats"
-```
+✅ Testé le 2026-07-11 avec de vraies clés : l'authentification OAuth2 et la
+recherche fonctionnent. Voir la limite documentée plus haut concernant
+l'absence de filtre "Stage" natif dans l'API.
 
 ## 2. Créer un webhook Discord
 

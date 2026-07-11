@@ -8,10 +8,18 @@ Identifiants attendus dans les variables d'environnement :
   - FRANCE_TRAVAIL_CLIENT_ID
   - FRANCE_TRAVAIL_CLIENT_SECRET
 
-NB : le code de type de contrat "STG" (Stage) est celui documenté par
-l'API France Travail pour le référentiel typesContrats. À vérifier lors du
-premier test en local (GET .../offresdemploi/v2/referentiel/typesContrats
-avec le token Bearer) si jamais aucun résultat n'est retourné.
+NB IMPORTANT (vérifié en conditions réelles le 2026-07-11) : contrairement
+à ce que suggèrent certains exemples publics, il n'existe PAS de code
+"Stage" dans le référentiel typeContrat (GET .../v2/referentiel/typesContrats
+— seulement CDI/CDD/MIS/SAI/...), ni dans le référentiel natureContrat (GET
+.../v2/referentiel/naturesContrats). Un stage n'étant légalement pas un
+"contrat de travail" en France, il n'est pas filtrable côté API : passer
+typeContrat=STG renvoie systématiquement une erreur HTTP 400. Les offres de
+stage réelles apparaissent avec un typeContrat classique (CDD/CDI/Intérim)
+et ne se distinguent que par leur texte libre. On filtre donc côté client
+sur la présence de "stage"/"stagiaire" dans le titre (voir
+_looks_like_internship), en plus du filtre de pertinence/durée de
+config.is_relevant().
 """
 import logging
 import os
@@ -29,6 +37,15 @@ SEARCH_URL = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/se
 PAGE_SIZE = 150  # taille de page maximale autorisée par l'API (range 0-149)
 MAX_RESULTS_PER_TERM = 1500  # garde-fou anti-boucle infinie
 REQUEST_DELAY_SECONDS = 0.4  # respecte les limites de débit de l'API
+
+# Pas de filtre "stage" côté API (voir docstring) : on exige en plus que le
+# titre contienne explicitement un de ces indices de stage.
+INTERNSHIP_TITLE_HINTS = ("stage", "stagiaire", "pfe")
+
+
+def _looks_like_internship(title):
+    title_lower = (title or "").lower()
+    return any(hint in title_lower for hint in INTERNSHIP_TITLE_HINTS)
 
 _token_cache = {"access_token": None, "expires_at": 0}
 
@@ -65,7 +82,6 @@ def _search_one_term(token, mots_cles):
     while start < MAX_RESULTS_PER_TERM:
         params = {
             "motsCles": mots_cles,
-            "typeContrat": "STG",
             **FRANCE_TRAVAIL_LOCATION_PARAMS,
         }
         req_headers = dict(headers)
@@ -130,6 +146,8 @@ def fetch_offers():
 
     normalized = []
     for offer_id, o in all_offers.items():
+        if not _looks_like_internship(o.get("intitule", "")):
+            continue
         entreprise = o.get("entreprise") or {}
         lieu = o.get("lieuTravail") or {}
         origine = o.get("origineOffre") or {}
