@@ -1,8 +1,10 @@
-# Bot de veille — Stage PFE en cybersécurité offensive
+# Bot de veille — Stage PFE en cybersécurité
 
-Surveille plusieurs sources d'offres de stage (pentest / red team / sécurité
-offensive) en France et notifie sur Discord dès qu'une offre pertinente
-apparaît.
+Surveille plusieurs sources d'offres de stage en cybersécurité en France
+(offensif, SOC, GRC, purple team...) et notifie sur Discord dès qu'une
+offre pertinente apparaît. Le filtre est volontairement large — le tri fin
+entre les domaines (pentest vs SOC vs GRC...) se fait manuellement à la
+réception des notifications.
 
 ## Sources
 
@@ -105,9 +107,13 @@ Tout se passe dans `config.py`, sans toucher au reste du code :
 - `SEARCH_TERMS` : termes envoyés en recherche à chaque source (une requête
   par terme).
 - `INCLUDE_KEYWORDS` : une offre n'est retenue que si son texte contient au
-  moins un de ces mots-clés.
+  moins un de ces mots-clés (recherche par mot entier, pas sous-chaîne —
+  important pour des mots courts comme "soc" ou "grc"). Volontairement
+  large par défaut (cybersécurité en général) ; resserrez cette liste si
+  vous voulez revenir à un filtre offensif strict (pentest/red team
+  uniquement).
 - `EXCLUDE_CONTRACT_KEYWORDS` : exclut les offres en alternance/apprentissage
-  même si elles matchent un mot-clé offensif.
+  même si elles matchent un mot-clé de `INCLUDE_KEYWORDS`.
 - `MIN_DURATION_MONTHS` / `MAX_DURATION_MONTHS` : fourchette de durée de
   stage acceptée (une offre sans durée précisée est conservée par défaut).
 - `FRANCE_TRAVAIL_LOCATION_PARAMS`, `APEC_LOCATION_FILTER`,

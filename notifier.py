@@ -24,8 +24,11 @@ SOURCE_LABELS = {
 def send_offer(offer):
     webhook_url = os.environ.get("DISCORD_WEBHOOK_URL")
     if not webhook_url:
-        logger.warning("DISCORD_WEBHOOK_URL non configuré, notification ignorée pour %s", offer["id"])
-        return
+        # Lève une exception plutôt que d'ignorer silencieusement : main.py
+        # ne doit marquer une offre comme "vue" que si elle a vraiment été
+        # notifiée, sinon une offre pertinente serait perdue définitivement
+        # si le webhook n'est pas encore configuré au moment du run.
+        raise RuntimeError("DISCORD_WEBHOOK_URL non configuré")
 
     source = offer.get("source", "")
     embed = {
