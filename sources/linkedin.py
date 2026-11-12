@@ -2,36 +2,27 @@
 Source LinkedIn — endpoint public "guest" (recherche d'offres sans connexion).
 
     GET https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search
-        ?keywords=...&location=...&f_JT=I&start=...
+        ?keywords=...&location=...&f_JT=F&start=...
 
 Renvoie du HTML pré-rendu (pas de JS à exécuter), utilisable en simple
-requests + BeautifulSoup. f_JT=I filtre sur le type de poste "Internship".
+requests + BeautifulSoup. f_JT=F filtre sur le type de poste "Full-time"
+(LinkedIn ne distingue pas CDI/CDD : le filtre de config.is_relevant exclut
+ensuite les titres contenant stage/CDD/freelance/etc.).
+
+Une recherche est faite pour chaque terme ET chaque pays de
+config.LINKEDIN_LOCATIONS (France, Suisse, Luxembourg) : c'est la seule
+source qui couvre la Suisse et le Luxembourg.
 
 Limites connues :
   - Les cartes de résultats n'exposent que le titre, l'entreprise, la ville
     et la date — pas la description complète. Le filtre de pertinence
-    (config.is_relevant) s'applique donc surtout sur le titre pour cette
-    source, ce qui est plus permissif/plus strict selon les cas que pour
-    France Travail ou APEC (où la description complète est disponible).
-  - LinkedIn bloque plus agressivement les IP de datacenter (comme celles
-    des runners GitHub Actions) que les IP résidentielles. En cas de blocage
-    (429/999), la source échoue proprement et les autres sources continuent
-    de fonctionner (voir main.py).
-  - Le paramètre f_JT=I (type de poste "Internship") n'est PAS honoré de
-    façon fiable par cet endpoint en accès anonyme : testé en comparant les
-    résultats avec et sans f_JT=I, les mêmes offres en CDI ("Pentester
-    confirmé", etc.) reviennent dans les deux cas. On applique donc un
-    filtre défensif supplémentaire sur le titre (voir INTERNSHIP_TITLE_HINTS)
-    pour ne garder que les intitulés qui ressemblent explicitement à un
-    stage, en plus du filtre de durée déjà fait par config.is_relevant.
-  - IMPORTANT (bug corrigé le 2026-07-11) : cet endpoint renvoie toujours
-    10 résultats par page, quel que soit le paramètre envoyé (testé avec
-    count=25/50 : toujours 10). Le code pensait auparavant que la page
-    faisait 25, donc il s'arrêtait après la 1ère page (10 < 25) en croyant
-    avoir atteint la fin — alors que des offres pertinentes ("Stage de fin
-    d'études - Consultant Cybersécurité", vérifié en conditions réelles)
-    n'apparaissaient qu'à partir du résultat 50. D'où PAGE_SIZE = 10 et une
-    profondeur de pagination augmentée ci-dessous.
+    s'applique donc sur le titre seul pour cette source.
+  - f_JT n'est pas honoré de façon fiable en accès anonyme (constaté
+    auparavant avec f_JT=I) : d'où le filtre défensif sur le titre.
+  - LinkedIn bloque plus agressivement les IP de datacenter (runners GitHub
+    Actions). En cas de blocage (429/999), la source échoue proprement et
+    les autres sources continuent de fonctionner (voir main.py).
+  - L'endpoint renvoie toujours 10 résultats par page (PAGE_SIZE = 10).
 """
 import logging
 import time
@@ -39,7 +30,7 @@ import time
 import requests
 from bs4 import BeautifulSoup
 
-from config import LINKEDIN_LOCATION, LINKEDIN_SEARCH_TERMS
+from config import LINKEDIN_LOCATIONS, LINKEDIN_SEARCH_TERMS, is_relevant
 
 logger = logging.getLogger(__name__)
 
@@ -54,18 +45,8 @@ HEADERS = {
 }
 
 PAGE_SIZE = 10  # taille de page réelle de l'endpoint, non configurable (voir docstring)
-MAX_RESULTS_PER_TERM = 100  # garde-fou anti-boucle infinie (= 10 pages / terme)
+MAX_RESULTS_PER_TERM = 50  # garde-fou (= 5 pages / terme / pays ; requêtes PAM très ciblées)
 REQUEST_DELAY_SECONDS = 1.5  # délai raisonnable entre requêtes
-
-# f_JT=I n'étant pas fiable en anonyme (voir docstring), on exige en plus
-# que le titre contienne explicitement un de ces indices de stage.
-INTERNSHIP_TITLE_HINTS = ("stage", "stagiaire", "intern", "internship", "pfe")
-
-
-def _looks_like_internship(title):
-    title_lower = (title or "").lower()
-    return any(hint in title_lower for hint in INTERNSHIP_TITLE_HINTS)
-
 
 def _extract_job_id(urn):
     if urn and ":" in urn:
@@ -73,21 +54,21 @@ def _extract_job_id(urn):
     return urn or None
 
 
-def _search_one_term(term):
+def _search_one_term(term, location):
     offers = []
     start = 0
 
     while start < MAX_RESULTS_PER_TERM:
         params = {
             "keywords": term,
-            "location": LINKEDIN_LOCATION,
-            "f_JT": "I",  # Internship
+            "location": location,
+            "f_JT": "F",  # Full-time
             "start": start,
         }
         resp = requests.get(SEARCH_URL, params=params, headers=HEADERS, timeout=20)
 
         if resp.status_code in (429, 999):
-            logger.warning("LinkedIn: bloqué (%s) pour le terme %r, arrêt", resp.status_code, term)
+            logger.warning("LinkedIn: bloqué (%s) pour %r / %r, arrêt", resp.status_code, term, location)
             break
         resp.raise_for_status()
 
@@ -106,7 +87,9 @@ def _search_one_term(term):
             location_tag = card.select_one("span.job-search-card__location")
             date_tag = card.select_one("time.job-search-card__listdate")
             title = title_tag.get_text(strip=True) if title_tag else ""
-            if not _looks_like_internship(title):
+            # Pas de description sur cet endpoint : on filtre tôt sur le
+            # titre pour éviter d'accumuler des offres hors sujet.
+            if not is_relevant(title):
                 continue
             offers.append({
                 "id": job_id,
@@ -128,15 +111,16 @@ def _search_one_term(term):
 
 def fetch_offers():
     all_offers = {}
-    for term in LINKEDIN_SEARCH_TERMS:
-        if not term or not term.strip():
-            continue
-        try:
-            for o in _search_one_term(term):
-                all_offers[o["id"]] = o
-        except Exception:
-            logger.exception("LinkedIn: échec de la recherche pour le terme %r", term)
-        time.sleep(REQUEST_DELAY_SECONDS)
+    for location in LINKEDIN_LOCATIONS:
+        for term in LINKEDIN_SEARCH_TERMS:
+            if not term or not term.strip():
+                continue
+            try:
+                for o in _search_one_term(term, location):
+                    all_offers[o["id"]] = o
+            except Exception:
+                logger.exception("LinkedIn: échec de la recherche pour %r / %r", term, location)
+            time.sleep(REQUEST_DELAY_SECONDS)
 
     normalized = []
     for offer_id, o in all_offers.items():

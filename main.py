@@ -1,5 +1,5 @@
 """
-Bot de veille stages PFE en cybersécurité offensive (pentest / red team).
+Bot de veille CDI — Consultant PAM / CyberArk (France, Suisse, Luxembourg).
 
 Orchestration : interroge chaque source, filtre les offres pertinentes,
 déduplique via seen_offers.json, et notifie les nouveautés sur Discord.

@@ -3,17 +3,18 @@ Source APEC — API JSON interne (non documentée officiellement).
 
 apec.fr affiche ses résultats de recherche via un composant Angular côté
 client ; le HTML brut ne contient donc aucune offre. En observant le
-trafic réseau de la page /candidat/recherche-stage.html (recherche stage
-dédiée), on identifie l'appel suivant, accessible directement en HTTP,
+trafic réseau de la page /candidat/recherche-emploi.html, on identifie l'appel suivant, accessible directement en HTTP,
 sans session ni cookie :
 
     POST https://www.apec.fr/cms/webservices/rechercheOffre
     Content-Type: application/json
     body: voir _build_search_body() ci-dessous
 
-Le code typesContrat=597171 correspond à "Stage" (déduit de la page
-recherche-stage.html ; à re-vérifier si APEC change son référentiel et
-que les résultats redeviennent vides ou incohérents).
+Le code typesContrat=101888 correspond à "CDI" dans le référentiel APEC
+(597171 = Stage, 101887 = CDD, 101889 = Intérim). À re-vérifier si APEC
+change son référentiel et que les résultats deviennent vides ou
+incohérents : faites une recherche sur apec.fr en cochant "CDI" et
+regardez le champ "typesContrat" envoyé dans la requête réseau.
 """
 import logging
 import time
@@ -27,7 +28,7 @@ logger = logging.getLogger(__name__)
 SEARCH_URL = "https://www.apec.fr/cms/webservices/rechercheOffre"
 DETAIL_URL_TEMPLATE = "https://www.apec.fr/candidat/recherche-emploi.html/emploi/detail-offre/{numero}"
 
-STAGE_TYPE_CONTRAT = 597171
+CDI_TYPE_CONTRAT = 101888
 
 HEADERS = {
     "User-Agent": (
@@ -36,7 +37,7 @@ HEADERS = {
     ),
     "Accept": "application/json, text/plain, */*",
     "Content-Type": "application/json",
-    "Referer": "https://www.apec.fr/candidat/recherche-stage.html/stage",
+    "Referer": "https://www.apec.fr/candidat/recherche-emploi.html/emploi",
 }
 
 PAGE_SIZE = 20
@@ -49,7 +50,7 @@ def _build_search_body(mots_cles, start_index):
         "lieux": APEC_LOCATION_FILTER,
         "fonctions": [],
         "statutPoste": [],
-        "typesContrat": [STAGE_TYPE_CONTRAT],
+        "typesContrat": [CDI_TYPE_CONTRAT],
         "typesConvention": [],
         "niveauxExperience": [],
         "idsEtablissement": [],
