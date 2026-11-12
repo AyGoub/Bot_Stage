@@ -1,4 +1,4 @@
-name: Veille stage cybersécurité offensive
+name: Veille CDI consultant PAM CyberArk
 
 on:
   schedule:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: watch-stage-pfe
+  group: watch-cdi-pam
   cancel-in-progress: false
 
 jobs:

@@ -32,7 +32,7 @@ def send_offer(offer):
 
     source = offer.get("source", "")
     embed = {
-        "title": (offer.get("title") or "Offre de stage")[:256],
+        "title": (offer.get("title") or "Offre CDI")[:256],
         "url": offer.get("url") or None,
         "color": SOURCE_COLORS.get(source, 0x2ECC71),
         "fields": [

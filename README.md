@@ -1,19 +1,19 @@
-# Bot de veille — Stage PFE en cybersécurité
+# Bot de veille — CDI Consultant PAM / CyberArk
 
-Surveille plusieurs sources d'offres de stage en cybersécurité en France
-(offensif, SOC, GRC, purple team...) et notifie sur Discord dès qu'une
-offre pertinente apparaît. Le filtre est volontairement large — le tri fin
-entre les domaines (pentest vs SOC vs GRC...) se fait manuellement à la
-réception des notifications.
+Surveille plusieurs sources d'offres d'emploi en **CDI** de consultant /
+ingénieur **PAM (Privileged Access Management)** — CyberArk en priorité,
+mais aussi Wallix, Delinea (ex-Thycotic), BeyondTrust — en **France**, en
+**Suisse** et au **Luxembourg**, et notifie sur Discord dès qu'une offre
+pertinente apparaît.
 
 ## Sources
 
-| Source | Méthode | Statut |
-|---|---|---|
-| [France Travail](https://francetravail.io) | API officielle (OAuth2) | ✅ Source principale |
-| [APEC](https://www.apec.fr) | API JSON interne (reverse-engineering léger) | ✅ Fonctionnelle |
-| [LinkedIn](https://www.linkedin.com) | Endpoint public "guest" (HTML) | ✅ Fonctionnelle, avec limites (voir ci-dessous) |
-| [Welcome to the Jungle](https://www.welcometothejungle.com) | — | ❌ Non implémentée (voir `sources/wttj.py`) |
+| Source | Méthode | Pays couverts | Filtre CDI |
+|---|---|---|---|
+| [France Travail](https://francetravail.io) | API officielle (OAuth2) | France | `typeContrat=CDI` côté API |
+| [APEC](https://www.apec.fr) | API JSON interne | France | `typesContrat=101888` (CDI) côté API |
+| [LinkedIn](https://www.linkedin.com) | Endpoint public "guest" (HTML) | France, Suisse, Luxembourg | Temps plein + exclusion par titre |
+| [Welcome to the Jungle](https://www.welcometothejungle.com) | — | — | ❌ Non implémentée (voir `sources/wttj.py`) |
 
 **Pourquoi pas Welcome to the Jungle ?** Leur site est protégé par un
 challenge anti-bot AWS WAF, et même en le contournant avec un navigateur
@@ -24,26 +24,16 @@ de navigateur légitime. Le détail de l'investigation est documenté dans
 `sources/wttj.py`.
 
 **Limite connue de la source LinkedIn** : leur endpoint public ne fournit
-que le titre de l'offre (pas la description complète), et leur filtre
-"type de poste = stage" ne s'applique pas de façon fiable en accès anonyme.
-Le bot compense en n'acceptant que les titres contenant explicitement un
-indice de stage ("stage", "stagiaire", "intern", "pfe"...), mais une offre
-de pentest en stage dont le titre ne le précise pas explicitement (ex:
-juste "Pentester (H/F)") pourrait être manquée.
+que le titre de l'offre (pas la description), et ne distingue pas CDI/CDD
+(seulement "temps plein"). Le bot ne garde donc que les titres contenant un
+mot-clé PAM (CyberArk, PAM, Wallix...) et écarte ceux qui mentionnent
+stage, alternance, CDD, freelance, contractor, etc. Une offre dont le titre
+est trop générique (ex: juste "Consultant IAM") peut être manquée sur
+LinkedIn ; elle sera en revanche captée par France Travail / APEC si la
+description mentionne CyberArk ou le PAM.
 
-**Limite (importante) de la source France Travail**, découverte en testant
-avec de vraies clés : il n'existe **aucun code "Stage"** dans les
-référentiels `typeContrat` (CDI/CDD/MIS/SAI/...) ni `natureContrat` de
-l'API — un stage n'étant légalement pas un "contrat de travail" en France,
-il est structurellement absent de cette taxonomie. Le paramètre
-`typeContrat=STG` documenté dans certains exemples publics n'existe pas et
-renvoie une erreur HTTP 400. Comme pour LinkedIn, le bot filtre donc côté
-client sur la présence de "stage"/"stagiaire"/"pfe" dans le titre. Testé en
-conditions réelles le 2026-07-11 : l'API répond correctement, mais très peu
-(voire aucune, au moment du test) offre de stage en cybersécurité
-offensive n'y est actuellement publiée — la plupart des offres pentest/red
-team sur France Travail sont des CDI. Ce n'est pas un bug, juste la réalité
-du marché ; le bot continuera de surveiller.
+**Suisse / Luxembourg** : seule LinkedIn couvre ces pays pour l'instant
+(France Travail et APEC sont franco-français).
 
 ## Installation locale
 
@@ -75,8 +65,7 @@ tout part de la fiche de l'API elle-même :
    `FRANCE_TRAVAIL_CLIENT_ID` / `FRANCE_TRAVAIL_CLIENT_SECRET`.
 
 ✅ Testé le 2026-07-11 avec de vraies clés : l'authentification OAuth2 et la
-recherche fonctionnent. Voir la limite documentée plus haut concernant
-l'absence de filtre "Stage" natif dans l'API.
+recherche fonctionnent.
 
 ## 2. Créer un webhook Discord
 
@@ -96,30 +85,27 @@ New repository secret**, ajoutez :
 
 Le workflow `.github/workflows/watch.yml` s'exécute automatiquement toutes
 les 30 minutes (et peut être déclenché manuellement depuis l'onglet
-**Actions** → **Veille stage cybersécurité offensive** → **Run workflow**).
+**Actions** → **Veille CDI consultant PAM CyberArk** → **Run workflow**).
 Il committe et pousse automatiquement `seen_offers.json` s'il a changé, pour
 ne jamais renotifier deux fois la même offre.
 
-## 4. Modifier les mots-clés ou cibler une ville précise
+## 4. Modifier les mots-clés ou les pays
 
 Tout se passe dans `config.py`, sans toucher au reste du code :
 
 - `SEARCH_TERMS` : termes envoyés en recherche à chaque source (une requête
-  par terme).
+  par terme, et par pays pour LinkedIn).
 - `INCLUDE_KEYWORDS` : une offre n'est retenue que si son texte contient au
-  moins un de ces mots-clés (recherche par mot entier, pas sous-chaîne —
-  important pour des mots courts comme "soc" ou "grc"). Volontairement
-  large par défaut (cybersécurité en général) ; resserrez cette liste si
-  vous voulez revenir à un filtre offensif strict (pentest/red team
-  uniquement).
-- `EXCLUDE_CONTRACT_KEYWORDS` : exclut les offres en alternance/apprentissage
-  même si elles matchent un mot-clé de `INCLUDE_KEYWORDS`.
-- `MIN_DURATION_MONTHS` / `MAX_DURATION_MONTHS` : fourchette de durée de
-  stage acceptée (une offre sans durée précisée est conservée par défaut).
-- `FRANCE_TRAVAIL_LOCATION_PARAMS`, `APEC_LOCATION_FILTER`,
-  `LINKEDIN_LOCATION` : filtres géographiques optionnels, un par source (les
-  formats diffèrent car chaque source a son propre système de codes lieu —
-  voir les commentaires dans `config.py`).
+  moins un de ces mots-clés (CyberArk, PAM, accès à privilèges, Wallix,
+  Delinea, BeyondTrust...). Recherche par mot entier.
+- `EXCLUDE_TITLE_KEYWORDS` : exclut les offres dont le **titre** mentionne
+  stage, alternance, CDD, freelance, intérim, contractor...
+- `EXCLUDE_ANYWHERE_KEYWORDS` : exclusions appliquées au titre et à la
+  description (ex: "offre de stage", "en alternance").
+- `LINKEDIN_LOCATIONS` : pays recherchés sur LinkedIn (par défaut France,
+  Switzerland, Luxembourg).
+- `FRANCE_TRAVAIL_LOCATION_PARAMS`, `APEC_LOCATION_FILTER` : filtres
+  géographiques optionnels en France.
 
 ## Architecture
 
